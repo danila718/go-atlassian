@@ -97,6 +97,15 @@ func (o *OrganizationService) Actions(ctx context.Context, organizationID string
 	return o.internalClient.Actions(ctx, organizationID)
 }
 
+// EventsStream returns a paginated list of audit log events from an organization using the /events-stream endpoint.
+//
+// GET /admin/v1/orgs/{organizationID}/events-stream
+//
+// https://developer.atlassian.com/cloud/admin/organization/rest/api-group-events/#api-v1-orgs-orgid-events-stream-get
+func (o *OrganizationService) EventsStream(ctx context.Context, organizationID string, options *model.OrganizationEventStreamOptScheme) (*model.OrganizationEventStreamPageScheme, *model.ResponseScheme, error) {
+	return o.internalClient.EventsStream(ctx, organizationID, options)
+}
+
 type internalOrganizationImpl struct {
 	c service.Connector
 }
@@ -130,7 +139,7 @@ func (i *internalOrganizationImpl) Gets(ctx context.Context, cursor string) (*mo
 func (i *internalOrganizationImpl) Get(ctx context.Context, organizationID string) (*model.AdminOrganizationScheme, *model.ResponseScheme, error) {
 
 	if organizationID == "" {
-		return nil, nil, model.ErrNoAdminOrganization
+		return nil, nil, fmt.Errorf("admin: %w", model.ErrNoAdminOrganization)
 	}
 
 	endpoint := fmt.Sprintf("admin/v1/orgs/%v", organizationID)
@@ -152,7 +161,7 @@ func (i *internalOrganizationImpl) Get(ctx context.Context, organizationID strin
 func (i *internalOrganizationImpl) Users(ctx context.Context, organizationID, cursor string) (*model.OrganizationUserPageScheme, *model.ResponseScheme, error) {
 
 	if organizationID == "" {
-		return nil, nil, model.ErrNoAdminOrganization
+		return nil, nil, fmt.Errorf("admin: %w", model.ErrNoAdminOrganization)
 	}
 
 	var endpoint strings.Builder
@@ -182,7 +191,7 @@ func (i *internalOrganizationImpl) Users(ctx context.Context, organizationID, cu
 func (i *internalOrganizationImpl) Domains(ctx context.Context, organizationID, cursor string) (*model.OrganizationDomainPageScheme, *model.ResponseScheme, error) {
 
 	if organizationID == "" {
-		return nil, nil, model.ErrNoAdminOrganization
+		return nil, nil, fmt.Errorf("admin: %w", model.ErrNoAdminOrganization)
 	}
 
 	var endpoint strings.Builder
@@ -212,11 +221,11 @@ func (i *internalOrganizationImpl) Domains(ctx context.Context, organizationID, 
 func (i *internalOrganizationImpl) Domain(ctx context.Context, organizationID, domainID string) (*model.OrganizationDomainScheme, *model.ResponseScheme, error) {
 
 	if organizationID == "" {
-		return nil, nil, model.ErrNoAdminOrganization
+		return nil, nil, fmt.Errorf("admin: %w", model.ErrNoAdminOrganization)
 	}
 
 	if domainID == "" {
-		return nil, nil, model.ErrNoAdminDomainID
+		return nil, nil, fmt.Errorf("admin: %w", model.ErrNoAdminDomainID)
 	}
 
 	endpoint := fmt.Sprintf("admin/v1/orgs/%v/domains/%v", organizationID, domainID)
@@ -238,7 +247,7 @@ func (i *internalOrganizationImpl) Domain(ctx context.Context, organizationID, d
 func (i *internalOrganizationImpl) Events(ctx context.Context, organizationID string, options *model.OrganizationEventOptScheme, cursor string) (*model.OrganizationEventPageScheme, *model.ResponseScheme, error) {
 
 	if organizationID == "" {
-		return nil, nil, model.ErrNoAdminOrganization
+		return nil, nil, fmt.Errorf("admin: %w", model.ErrNoAdminOrganization)
 	}
 
 	params := url.Values{}
@@ -249,12 +258,12 @@ func (i *internalOrganizationImpl) Events(ctx context.Context, organizationID st
 	if options != nil {
 
 		if !options.To.IsZero() {
-			timeAsEpoch := int(options.To.Unix())
+			timeAsEpoch := int(options.To.UnixMilli())
 			params.Add("to", strconv.Itoa(timeAsEpoch))
 		}
 
 		if !options.From.IsZero() {
-			timeAsEpoch := int(options.From.Unix())
+			timeAsEpoch := int(options.From.UnixMilli())
 			params.Add("from", strconv.Itoa(timeAsEpoch))
 		}
 
@@ -291,11 +300,11 @@ func (i *internalOrganizationImpl) Events(ctx context.Context, organizationID st
 func (i *internalOrganizationImpl) Event(ctx context.Context, organizationID, eventID string) (*model.OrganizationEventScheme, *model.ResponseScheme, error) {
 
 	if organizationID == "" {
-		return nil, nil, model.ErrNoAdminOrganization
+		return nil, nil, fmt.Errorf("admin: %w", model.ErrNoAdminOrganization)
 	}
 
 	if eventID == "" {
-		return nil, nil, model.ErrNoEventID
+		return nil, nil, fmt.Errorf("admin: %w", model.ErrNoEventID)
 	}
 
 	endpoint := fmt.Sprintf("admin/v1/orgs/%v/events/%v", organizationID, eventID)
@@ -317,7 +326,7 @@ func (i *internalOrganizationImpl) Event(ctx context.Context, organizationID, ev
 func (i *internalOrganizationImpl) Actions(ctx context.Context, organizationID string) (*model.OrganizationEventActionScheme, *model.ResponseScheme, error) {
 
 	if organizationID == "" {
-		return nil, nil, model.ErrNoAdminOrganization
+		return nil, nil, fmt.Errorf("admin: %w", model.ErrNoAdminOrganization)
 	}
 
 	endpoint := fmt.Sprintf("admin/v1/orgs/%v/event-actions", organizationID)
@@ -334,4 +343,48 @@ func (i *internalOrganizationImpl) Actions(ctx context.Context, organizationID s
 	}
 
 	return event, res, nil
+}
+
+func (i *internalOrganizationImpl) EventsStream(ctx context.Context, organizationID string, options *model.OrganizationEventStreamOptScheme) (*model.OrganizationEventStreamPageScheme, *model.ResponseScheme, error) {
+	if organizationID == "" {
+		return nil, nil, model.ErrNoAdminOrganization
+	}
+
+	params := url.Values{}
+	if options != nil {
+		if !options.From.IsZero() {
+			params.Add("from", strconv.FormatInt(options.From.UnixMilli(), 10))
+		}
+		if !options.To.IsZero() {
+			params.Add("to", strconv.FormatInt(options.To.UnixMilli(), 10))
+		}
+		if options.Cursor != "" {
+			params.Add("cursor", options.Cursor)
+		}
+		if options.SortOrder != "" {
+			params.Add("sortOrder", options.SortOrder)
+		}
+		if options.Limit > 0 {
+			params.Add("limit", strconv.Itoa(options.Limit))
+		}
+	}
+
+	var endpoint strings.Builder
+	endpoint.WriteString(fmt.Sprintf("admin/v1/orgs/%v/events-stream", organizationID))
+	if params.Encode() != "" {
+		endpoint.WriteString(fmt.Sprintf("?%v", params.Encode()))
+	}
+
+	req, err := i.c.NewRequest(ctx, http.MethodGet, endpoint.String(), "", nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	page := new(model.OrganizationEventStreamPageScheme)
+	res, err := i.c.Call(req, page)
+	if err != nil {
+		return nil, res, err
+	}
+
+	return page, res, nil
 }
